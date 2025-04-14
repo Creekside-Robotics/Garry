@@ -14,12 +14,14 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.StructArrayPublisher;
+import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.wpilibj.ADIS16448_IMU;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-
 import frc.robot.Constants.DeviceIds;
 import frc.robot.Constants.DrivetrainConstants;
 import frc.robot.utils.LimelightHelpers;
@@ -65,6 +67,9 @@ public class Drivetrain extends SubsystemBase {
 
   private final Field2d field2d = new Field2d();
 
+  private final StructArrayPublisher<SwerveModuleState> swerveStatePublisher;
+  private final StructPublisher<Pose2d> posePublisher; 
+
   public Drivetrain() {
     gyro.reset();
 
@@ -73,7 +78,10 @@ public class Drivetrain extends SubsystemBase {
       getModulePositions(), 
       new Pose2d());
 
-    SmartDashboard.putData("Field Display", field2d);
+    SmartDashboard.putData("drivetrain/Field Display", field2d);
+    this.swerveStatePublisher = NetworkTableInstance.getDefault().getStructArrayTopic("drivetrain/states", SwerveModuleState.struct).publish();
+    this.posePublisher = NetworkTableInstance.getDefault().getStructTopic("drivetrain/pose", Pose2d.struct).publish();
+
     CameraServer.startAutomaticCapture();
   }
 
@@ -81,6 +89,7 @@ public class Drivetrain extends SubsystemBase {
   public void periodic() {
     this.poseEstimator.update(getGyroAngle(), getModulePositions());
     this.displayDrivetrainPose(this.poseEstimator.getEstimatedPosition());
+    this.posePublisher.set(this.poseEstimator.getEstimatedPosition());
     this.updateOdometry();
     // this.updatePoseWithLimelight();
   }
@@ -91,8 +100,8 @@ public class Drivetrain extends SubsystemBase {
             ChassisSpeeds.discretize( 
                 fieldRelative ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, rot, getGyroAngle()) : new ChassisSpeeds(xSpeed, ySpeed, rot), DrivetrainConstants.periodTime));
 
-    SmartDashboard.putNumber("AutoSpeed", states[0].speedMetersPerSecond);
-
+    this.swerveStatePublisher.set(states);
+    
     modules[0].setDesiredState(states[0], false);
     modules[1].setDesiredState(states[1], false);
     modules[2].setDesiredState(states[2], false);
@@ -120,12 +129,12 @@ public class Drivetrain extends SubsystemBase {
 
     this.field2d.setRobotPose(pose);
     
-    SmartDashboard.putData("Field Display", field2d);
+    SmartDashboard.putData("drivetrain/field_display", field2d);
   }
 
   private Rotation2d getGyroAngle() {
     Rotation2d rotation = Rotation2d.fromDegrees(-this.gyro.getGyroAngleZ());
-    SmartDashboard.putNumber("Gyro", rotation.getRadians());
+    SmartDashboard.putNumber("drivetrain/gyro", rotation.getRadians());
     return rotation;
   }
 
